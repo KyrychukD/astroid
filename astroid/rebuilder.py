@@ -11,11 +11,14 @@ order to get a single Astroid representation
 """
 
 import sys
-import _ast
+import typed_ast as _ast
+
+# TODO: allow for picking Python 2
+import typed_ast.ast3 as _ast
 
 import astroid
+from astroid._ast import _parse
 from astroid import nodes
-
 
 
 _BIN_OP_CLASSES = {_ast.Add: '+',
@@ -219,12 +222,32 @@ class TreeRebuilder(object):
         newnode.postinit(self.visit(node.test, newnode), msg)
         return newnode
 
+    def check_type_comment(self, node):
+        type_comment = getattr(node, 'type_comment', None)
+        if not type_comment:
+            return None
+
+        try:
+            type_comment_ast = _parse(type_comment)
+        except SyntaxError:
+            # Invalid type comment, just skip it.
+            return None
+
+        type_object = self.visit(type_comment_ast.body[0], node)
+        if not isinstance(type_object, nodes.Expr):
+            return None
+
+        return type_object.value
+
     def visit_assign(self, node, parent):
-        """visit a Assign node by returning a fresh instance of it"""
+        """visit a Assign node by return\ing a fresh instance of it"""
+        type_annotation = self.check_type_comment(node)
         newnode = nodes.Assign(node.lineno, node.col_offset, parent)
-        newnode.postinit([self.visit(child, newnode)
-                          for child in node.targets],
-                         self.visit(node.value, newnode))
+        newnode.postinit(
+            targets=[self.visit(child, newnode) for child in node.targets],
+            value=self.visit(node.value, newnode),
+            type_annotation=type_annotation,
+        )
         return newnode
 
     def visit_assignname(self, node, parent, node_name=None):
@@ -448,12 +471,14 @@ class TreeRebuilder(object):
     def _visit_for(self, cls, node, parent):
         """visit a For node by returning a fresh instance of it"""
         newnode = cls(node.lineno, node.col_offset, parent)
-        newnode.postinit(self.visit(node.target, newnode),
-                         self.visit(node.iter, newnode),
-                         [self.visit(child, newnode)
-                          for child in node.body],
-                         [self.visit(child, newnode)
-                          for child in node.orelse])
+        type_annotation = self.check_type_comment(node)
+        newnode.postinit(
+            target=self.visit(node.target, newnode),
+            iter=self.visit(node.iter, newnode),
+            body=[self.visit(child, newnode) for child in node.body],
+            orelse=[self.visit(child, newnode) for child in node.orelse],
+            type_annotation=type_annotation,
+        )
         return newnode
 
     def visit_for(self, node, parent):
@@ -748,9 +773,13 @@ class TreeRebuilder(object):
             optional_vars = self.visit(node.optional_vars, newnode)
         else:
             optional_vars = None
-        newnode.postinit([(expr, optional_vars)],
-                         [self.visit(child, newnode)
-                          for child in node.body])
+
+        type_annotation = self.check_type_comment(node)
+        newnode.postinit(
+            items=[(expr, optional_vars)],
+            body=[self.visit(child, newnode) for child in node.body],
+            type_annotation=type_annotation,
+        )
         return newnode
 
     def visit_yield(self, node, parent):
@@ -848,9 +877,13 @@ class TreeRebuilder3(TreeRebuilder):
             expr = self.visit(child.context_expr, newnode)
             var = _visit_or_none(child, 'optional_vars', self, newnode)
             return expr, var
-        newnode.postinit([visit_child(child) for child in node.items],
-                         [self.visit(child, newnode)
-                          for child in node.body])
+
+        type_annotation = self.check_type_comment(node)
+        newnode.postinit(
+            items=[visit_child(child) for child in node.items],
+            body=[self.visit(child, newnode) for child in node.body],
+            type_annotation=type_annotation,
+        )
         return newnode
 
     def visit_with(self, node, parent):

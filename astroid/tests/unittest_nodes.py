@@ -865,5 +865,56 @@ def test_unknown():
     assert isinstance(nodes.Unknown().qname(), str)
 
 
+def test_type_comments_with():
+    module = builder.parse('''
+    with a as b: # type: int
+        pass
+    with a as b: # type: ignore
+        pass
+    ''')
+    node = module.body[0]
+    ignored_node = module.body[1]
+    assert isinstance(node.type_annotation, astroid.Name)
+
+    assert ignored_node.type_annotation is None
+
+
+def test_type_comments_for():
+    module = builder.parse('''
+    for a, b in [1, 2, 3]: # type: List[int]
+        pass
+    for a, b in [1, 2, 3]: # type: ignore
+        pass
+    ''')
+    node = module.body[0]
+    ignored_node = module.body[1]
+    assert isinstance(node.type_annotation, astroid.Name)
+
+    assert ignored_node.type_annotation is None
+
+
+def test_type_coments_assign():
+    module = builder.parse('''
+    a, b = [1, 2, 3] # type: List[int]
+    a, b = [1, 2, 3] # type: ignore
+    ''')
+    node = module.body[0]
+    ignored_node = module.body[1]
+    assert isinstance(node.type_annotation, astroid.Name)
+
+    assert ignored_node.type_annotation is None
+
+
+def test_type_comments_invalid_expression():
+    module = builder.parse('''
+    a, b = [1, 2, 3] # type: something completely invalid
+    a, b = [1, 2, 3] # typeee: 2*+4
+    a, b = [1, 2, 3] # type: List[int
+    ''')
+    for node in module.body:
+        print(node)
+        assert node.type_annotation is None
+
+
 if __name__ == '__main__':
     unittest.main()

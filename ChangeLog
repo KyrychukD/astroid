@@ -2,6 +2,7 @@ Change log for the astroid package (used to be astng)
 =====================================================
 
 --
+   * Switched to using typed_ast for getting access to type comments
 
    * typing.X[...] and typing.NewType are inferred as classes instead of instances.
 

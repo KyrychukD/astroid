@@ -19,7 +19,8 @@ install_requires = [
     'lazy_object_proxy',
     'six',
     'wrapt',
-    'typing;python_version<"3.5"'
+    'typing;python_version<"3.5"',
+    'typed_ast;python_version<"3.7"',
 ]
 
 # pylint: disable=redefined-builtin; why license is a builtin anyway?
